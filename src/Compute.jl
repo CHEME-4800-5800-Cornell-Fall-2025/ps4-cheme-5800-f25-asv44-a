@@ -11,10 +11,10 @@ function _objective_function(w::Array{Float64,1}, ḡ::Array{Float64,1},
 
 
     # TODO: This version of the objective function includes the barrier term, and the penalty terms -
-    f = w'*(Σ̂*w) + (1/(2*ρ))*((sum(w) - 1.0)^2 + (transpose(ḡ)*w - R)^2) - (1/μ)*sum(_safe_log.(w));
+    #f = w'*(Σ̂*w) + (1/(2*ρ))*((sum(w) - 1.0)^2 + (transpose(ḡ)*w - R)^2) - (1/μ)*sum(_safe_log.(w));
 
     # TODO: This version of the objective function does NOT have the barrier term
-    # f = w'*(Σ̂*w) + (1/(2*ρ))*((sum(w) - 1.0)^2 + (transpose(ḡ)*w - R)^2);
+     f = w'*(Σ̂*w) + (1/(2*ρ))*((sum(w) - 1.0)^2 + (transpose(ḡ)*w - R)^2);
 
 
     return f;
@@ -74,7 +74,34 @@ function solve(model::MySimulatedAnnealingMinimumVariancePortfolioAllocationProb
         accepted_counter = 0; 
         
         # TODO: Implement simulated annealing logic here -
-        throw(ErrorException("Oooops! Simulated annealing logic not yet implemented!!"));
+        #throw(ErrorException("Oooops! Simulated annealing logic not yet implemented!!"));
+        for  _= 1: KL
+            candidate_w = current_w .+ β*randn(length(current_w));
+            
+            candidate_w = max.(0.0, candidate_w); # check non-negativity here, no barriers. To get rid of the barrier term comment out this line
+
+
+            candidate_f = _objective_function(candidate_w, ḡ, Σ̂, R, μ, ρ);
+            
+            if candidate_f < current_f
+                current_w = candidate_w;
+                current_f = candidate_f;
+                accepted_counter += 1;
+                
+                if current_f < f_best
+                    w_best = current_w;
+                    f_best = current_f;
+                end
+            else
+                Δf = candidate_f - current_f;
+                acceptance_probability = exp(-Δf / T);
+                if rand() < acceptance_probability
+                    current_w = candidate_w;
+                    current_f = candidate_f;
+                    accepted_counter += 1;
+                end
+            end
+    end
 
         # update KL -
         fraction_accepted = accepted_counter/KL; # what is the fraction of accepted moves
@@ -89,9 +116,10 @@ function solve(model::MySimulatedAnnealingMinimumVariancePortfolioAllocationProb
             KL = ceil(Int, 1.5*KL);
         end
 
-        # update penalty parameters and T -
-        μ *= τ*μ;
-        ρ *= τ*ρ;
+    # update penalty parameters and T -
+    # multiply by τ (not τ*μ which would square μ)
+    μ *= τ;
+    ρ *= τ;
 
         if (T ≤ T₁)
             has_converged = true;
